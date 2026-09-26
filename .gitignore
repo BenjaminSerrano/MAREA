@@ -1,0 +1,10 @@
+# sistema / entorno
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.claude/
+
+# documentos de terceros (no se redistribuyen)
+ALGO.pdf
+fmars-12-1691225.pdf

@@ -1,0 +1,232 @@
+"""
+Configuración compartida para todos los notebooks de experimento MAREA.
+
+Carga las 71 funciones CEC 2014/2017/2022, define MaxFES, dimensiones,
+semillas y utilidades de guardado incremental.
+"""
+
+import numpy as np
+import os, time, json, tempfile
+import multiprocessing as mp
+import opfunu.cec_based.cec2014 as c14
+import opfunu.cec_based.cec2017 as c17
+import opfunu.cec_based.cec2022 as c22
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PARÁMETROS GLOBALES DEL EXPERIMENTO
+# ══════════════════════════════════════════════════════════════════════════════
+
+N_RUNS      = 51
+MAXFES      = [5_000, 50_000, 500_000, 5_000_000]
+DIMS        = [10, 50]
+POP_SIZE    = 80
+RESULTS_DIR = "resultados_experimento"
+N_WORKERS   = 3   # cores por notebook (24 cores / 8 notebooks = 3 cada uno)
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CARGA DE FUNCIONES CEC
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_suite(module, prefix, dims_available):
+    import inspect
+    classes = sorted(
+        [(name, obj) for name, obj in inspect.getmembers(module, inspect.isclass)
+         if name.startswith('F') and name[1].isdigit()],
+        key=lambda x: int(''.join(filter(str.isdigit, x[0].replace(prefix, '')))))
+    return [{"name": name, "class": cls, "dims": dims_available, "suite": prefix}
+            for name, cls in classes]
+
+
+CEC_REGISTRY = (
+    _load_suite(c14, "CEC2014", [10, 50]) +
+    _load_suite(c17, "CEC2017", [10, 50]) +
+    _load_suite(c22, "CEC2022", [10, 20])
+)
+
+
+def get_function(entry, ndim):
+    fn_obj   = entry["class"](ndim=ndim)
+    f_global = fn_obj.f_global
+    def wrapped(x):
+        return fn_obj.evaluate(x) - f_global
+    wrapped.__name__ = entry["name"]
+    wrapped.bounds   = [(-100., 100.)] * ndim
+    return wrapped
+
+
+def get_problems_for_dim(ndim):
+    problems = []
+    for i, entry in enumerate(CEC_REGISTRY):
+        eff_dim = 20 if (ndim == 50 and 50 not in entry["dims"]) else ndim
+        f = get_function(entry, eff_dim)
+        problems.append({
+            "pid": i, "name": entry["name"],
+            "suite": entry["suite"], "dim": eff_dim,
+            "f": f, "bounds": f.bounds,
+        })
+    return problems
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GUARDADO INCREMENTAL (JSON — sin pickle)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def result_path(alg_name, ndim, maxfes):
+    return os.path.join(RESULTS_DIR, f"{alg_name}_D{ndim}_FES{maxfes}.json")
+
+
+def load_partial(alg_name, ndim, maxfes):
+    path = result_path(alg_name, ndim, maxfes)
+    if os.path.exists(path):
+        with open(path, "r") as fh:
+            return json.load(fh)
+    return {}
+
+
+def save_result(alg_name, ndim, maxfes, pid, run, best_f):
+    """
+    Guarda un resultado de forma ATÓMICA.
+
+    Se escribe a un temporal en el mismo directorio y se hace os.replace(),
+    que en POSIX es atómico: el archivo final nunca queda a medias. Con el
+    open(path, "w") anterior, un kill/OOM/reboot en medio del json.dump
+    truncaba el archivo y se perdían las hasta 3.621 corridas ya acumuladas
+    en esa celda, no sólo la última.
+    """
+    path = result_path(alg_name, ndim, maxfes)
+    data = load_partial(alg_name, ndim, maxfes)
+    data[f"pid{pid}_run{run}"] = float(best_f)
+
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(data, fh)
+            fh.flush()
+            os.fsync(fh.fileno())      # los bytes llegan al disco...
+        os.replace(tmp, path)          # ...antes de publicar el nombre final
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def is_done(data, pid, run):
+    return f"pid{pid}_run{run}" in data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RUNNER GENÉRICO
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _import_alg(alg_name):
+    """
+    Importa el algoritmo por nombre dentro del worker.
+    Necesario porque funciones definidas en Jupyter no son serializables (pickle).
+    """
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+    if alg_name == "MAREA":
+        from marea_benchmark import marea, MAREAParams
+        def fn(f, bounds, N, T, seed):
+            p = MAREAParams(); p.N = N; p.T = T
+            return marea(f, bounds, p, seed=seed)
+    else:
+        import competidores as comp
+        raw = getattr(comp, alg_name.lower())
+        def fn(f, bounds, N, T, seed):
+            return raw(f, bounds, N=N, T=T, seed=seed)
+    return fn
+
+
+def _run_single(args):
+    """
+    Worker para ProcessPoolExecutor.
+    Recibe alg_name como string — importa el algoritmo localmente.
+    Así evitamos serializar callables entre procesos (falla en Jupyter).
+    """
+    alg_name, f_entry_idx, ndim, run, N, T = args
+
+    alg_fn  = _import_alg(alg_name)
+    entry   = CEC_REGISTRY[f_entry_idx]
+    eff_dim = 20 if (ndim == 50 and 50 not in entry["dims"]) else ndim
+    fn_obj  = entry["class"](ndim=eff_dim)
+    f_global = fn_obj.f_global
+
+    def f(x): return fn_obj.evaluate(x) - f_global
+    f.bounds = [(-100., 100.)] * eff_dim
+
+    result = alg_fn(f, f.bounds, N=N, T=T, seed=run)
+    return float(result["best_f"])
+
+
+def run_experiment(alg_name, alg_fn, ndim, maxfes, verbose=True, n_workers=N_WORKERS):
+    """
+    Ejecuta alg_fn sobre todos los problemas CEC para (ndim, maxfes).
+    Paraleliza las 51 corridas usando n_workers procesos.
+    Guarda resultados de forma incremental en JSON.
+    Reanuda automáticamente si ya hay resultados parciales.
+
+    alg_fn  : función con firma  alg_fn(f, bounds, N, T, seed) -> {"best_f": float, ...}
+    n_workers: cores a usar (default: N_WORKERS = 24 cores / 8 notebooks)
+    """
+    T        = max(1, maxfes // POP_SIZE)
+    problems = get_problems_for_dim(ndim)
+    partial  = load_partial(alg_name, ndim, maxfes)
+    total    = len(problems) * N_RUNS
+    done_before = sum(1 for p in problems for r in range(N_RUNS)
+                      if is_done(partial, p["pid"], r))
+
+    if verbose:
+        print(f"\n{'='*62}")
+        print(f"  {alg_name:10s} | D={ndim:2d} | MaxFES={maxfes:>10,} | T={T:,}")
+        print(f"  Problemas: {len(problems)} | Corridas: {N_RUNS} | Workers: {n_workers}")
+        print(f"  Total: {total:,} | Ya completadas: {done_before}/{total}")
+        print(f"{'='*62}")
+
+    t_start = time.time()
+
+    for prob in problems:
+        pid    = prob["pid"]
+        bounds = prob["bounds"]
+
+        # Identificar corridas pendientes
+        pending = [r for r in range(N_RUNS) if not is_done(partial, pid, r)]
+        done_vals = [partial[f"pid{pid}_run{r}"]
+                     for r in range(N_RUNS) if is_done(partial, pid, r)]
+
+        if pending:
+            # Se pasa alg_name (string) — el worker importa el algoritmo internamente
+            # Usamos fork (Linux/macOS) para evitar problemas de serialización en Jupyter
+            args_list = [(alg_name, pid, ndim, run, POP_SIZE, T) for run in pending]
+
+            ctx = mp.get_context("fork")
+            with ctx.Pool(processes=n_workers) as pool:
+                bfs = pool.map(_run_single, args_list)
+
+            for run, bf in zip(pending, bfs):
+                save_result(alg_name, ndim, maxfes, pid, run, bf)
+                partial[f"pid{pid}_run{run}"] = bf
+                done_vals.append(bf)
+
+        if verbose:
+            elapsed = time.time() - t_start
+            n_done  = sum(1 for p2 in problems[:pid+1]
+                         for r in range(N_RUNS)
+                         if is_done(partial, p2["pid"], r))
+            pct   = n_done / total * 100
+            speed = max(n_done - done_before, 1) / max(elapsed, 0.001)
+            eta_s = (total - n_done) / speed
+            eta   = f"{eta_s/60:.0f}m" if eta_s < 3600 else f"{eta_s/3600:.1f}h"
+            print(f"  [{pct:5.1f}%] {prob['name']:12s}  "
+                  f"mean={np.mean(done_vals):.3e}  "
+                  f"best={np.min(done_vals):.3e}  "
+                  f"ETA={eta}")
+
+    elapsed_total = time.time() - t_start
+    if verbose:
+        print(f"\n  ✓ Completado en {elapsed_total/60:.1f} min")
+    return load_partial(alg_name, ndim, maxfes)
