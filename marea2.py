@@ -450,6 +450,8 @@ def config(name: str) -> MAREA2Params:
         p.colonies = False; p.nutrient_memory = False; p.lag = 0.0
     elif name == 'A2_gompertz':               # sin colonias + Gompertz en vez de la logistica
         p.colonies = False; p.pop_schedule = 'gompertz'
+    elif name == 'A2_sin_quorum':             # sin colonias + sin quorum (tercera ley, Fase 1a)
+        p.colonies = False; p.quorum = False
     elif name == 'A2_todo':                   # todos los cambios juntos (Student-t se conserva)
         p.colonies = False; p.noise = 'normal'; p.gamma_max = 1.0
         p.limit_mode = 'budget'; p.nutrient_memory = False; p.lag = 0.0
@@ -477,4 +479,4 @@ ABLATION_CONFIGS = ['FULL', 'sin_colonias', 'sin_inanicion', 'sin_quorum',
 #    resultados identicos a sin_colonias)
 #   python ablacion_marea2.py report --dims 10 50 --maxfes 50000     (muestra ABLATION + A2)
 A2_CONFIGS = ['sin_colonias', 'A2_eje_student', 'A2_eje_gauss', 'A2_limit',
-              'A2_lite', 'A2_gompertz', 'A2_todo']
+              'A2_lite', 'A2_gompertz', 'A2_todo', 'A2_sin_quorum']
