@@ -13,9 +13,11 @@ Paradigmas representados:
     Distribución : CMA-ES (Hansen & Ostermeier, 2001) vía scipy
     Recocido     : SA — Simulated Annealing clásico
     Firefly      : FA (Yang, 2010)
+    DE adaptativo: L-SHADE (Tanabe & Fukunaga, 2014), jSO (Brest et al., 2017)
 
 Parámetros: valores recomendados por los autores originales (sin re-tuning).
 Presupuesto: MaxFES controlado externamente; aquí T=500 iteraciones × N agentes.
+L-SHADE y jSO usan su propia población y reciben el presupuesto (T+1)*N.
 """
 
 import numpy as np
@@ -510,6 +512,152 @@ def fa(f, bounds, N=80, T=500, alpha=0.5, beta0=1.0, gamma=1.0, seed=0):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 8-9. L-SHADE y jSO — DE adaptativo de estado del arte
+#    L-SHADE: Tanabe & Fukunaga (2014). "Improving the search performance of
+#             SHADE using linear population size reduction." CEC 2014 (1º).
+#    jSO:     Brest, Maučec & Bošković (2017). "Single objective real-parameter
+#             optimization: algorithm jSO." CEC 2017 (2º; 1º entre los DE).
+#
+# A diferencia de los 7 clásicos, NO usan N=80 fijo: derivan su población de D
+# y la reducen linealmente hasta 4 según las FES consumidas (LPSR). Por eso
+# reciben un presupuesto, no (N, T). Con la firma común (N, T) del runner el
+# presupuesto es (T+1)*N — el mismo que gastan los clásicos —; `maxfes`
+# explícito lo sustituye (validación contra CEC2017 a 10 000·D exactos).
+#
+# Parámetros de los autores, sin re-tuning:
+#                 L-SHADE           jSO
+#   N_init        18·D              round(25·ln(D)·√D)
+#   N_min         4                 4
+#   H             6                 5 (la última celda fija en 0.9)
+#   M_F, M_CR     0.5, 0.5          0.3, 0.8
+#   archivo       2.6·N             1.0·N
+#   p (p-best)    0.11              0.125 → 0.25 lineal en FES
+#   mutación      cur-to-pbest/1    cur-to-pbest-w/1 (F_w = 0.7F/0.8F/1.2F)
+#   memoria       Lehmer ponderada  (Lehmer ponderada + valor previo) / 2
+#   jSO además:   CR >= 0.7 (<25% FES), >= 0.6 (<50%); F <= 0.7 (<60%).
+# Límites: si v_j sale del dominio, v_j = (límite + x_ij)/2 (ambos papers).
+# El valor terminal de M_CR (⊥ → CR = 0) se representa con NaN.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _shade(f, bounds, maxfes, seed, jso):
+    rng = np.random.default_rng(seed)
+    L, U = _parse_bounds(bounds)
+    n = len(bounds)
+
+    if jso:
+        N_init = int(round(25 * np.log(n) * np.sqrt(n)))
+        H, r_arc, mf0, mcr0 = 5, 1.0, 0.3, 0.8
+    else:
+        N_init = 18 * n
+        H, r_arc, mf0, mcr0 = 6, 2.6, 0.5, 0.5
+    N_min = 4
+    M_F = np.full(H, mf0); M_CR = np.full(H, mcr0)
+    if jso:
+        M_F[-1] = M_CR[-1] = 0.9
+    k_max = H - 1 if jso else H          # celdas actualizables de la memoria
+    k = 0
+
+    fc, est = _presupuesto(f, maxfes)
+    history = []
+    g = 0
+    try:
+        N = N_init
+        X = rng.uniform(L, U, size=(N, n))
+        Fx = np.array([fc(x) for x in X])
+        A = np.empty((0, n))
+        history.append(est["best_f"])
+
+        while True:
+            g += 1
+            frac = est["n"] / maxfes
+            idx = np.arange(N)
+
+            # ── parámetros de control desde la memoria ────────────────────────
+            r = rng.integers(0, H, N)
+            mcr = M_CR[r]
+            CR = np.where(np.isnan(mcr), 0.0,
+                          np.clip(rng.normal(np.nan_to_num(mcr), 0.1), 0, 1))
+            F = M_F[r] + 0.1 * rng.standard_cauchy(N)
+            while np.any(F <= 0):
+                bad = F <= 0
+                F[bad] = M_F[r[bad]] + 0.1 * rng.standard_cauchy(bad.sum())
+            F = np.minimum(F, 1.0)
+            if jso:
+                if frac < 0.25:  CR = np.maximum(CR, 0.7)
+                elif frac < 0.5: CR = np.maximum(CR, 0.6)
+                if frac < 0.6:   F = np.minimum(F, 0.7)
+                Fw = F * (0.7 if frac < 0.2 else 0.8 if frac < 0.4 else 1.2)
+                p = 0.125 + 0.125 * frac
+            else:
+                Fw = F
+                p = 0.11
+
+            # ── current-to-pbest(-w)/1 con archivo ────────────────────────────
+            n_p = max(2, int(round(p * N)))
+            pb = np.argsort(Fx)[rng.integers(0, n_p, N)]
+            r1 = rng.integers(0, N, N)
+            while np.any(m := r1 == idx):
+                r1[m] = rng.integers(0, N, m.sum())
+            PA = np.vstack([X, A])
+            r2 = rng.integers(0, len(PA), N)
+            while np.any(m := (r2 == idx) | (r2 == r1)):
+                r2[m] = rng.integers(0, len(PA), m.sum())
+            V = X + Fw[:, None] * (X[pb] - X) + F[:, None] * (X[r1] - PA[r2])
+            V = np.where(V < L, (L + X) / 2, V)
+            V = np.where(V > U, (U + X) / 2, V)
+
+            # ── cruce binomial ────────────────────────────────────────────────
+            mask = rng.random((N, n)) < CR[:, None]
+            mask[idx, rng.integers(0, n, N)] = True
+            Ut = np.where(mask, V, X)
+            Fu = np.array([fc(u) for u in Ut])
+
+            # ── selección, archivo y memoria ──────────────────────────────────
+            better = Fu < Fx
+            if better.any():
+                S_CR, S_F = CR[better], F[better]
+                w = Fx[better] - Fu[better]; w = w / w.sum()
+                A = np.vstack([A, X[better]])
+                if np.isnan(M_CR[k]) or S_CR.max() == 0:
+                    cr_new = np.nan
+                else:
+                    cr_new = np.sum(w * S_CR**2) / np.sum(w * S_CR)
+                f_new = np.sum(w * S_F**2) / np.sum(w * S_F)
+                if jso:
+                    cr_new = (cr_new + M_CR[k]) / 2
+                    f_new = (f_new + M_F[k]) / 2
+                M_CR[k], M_F[k] = cr_new, f_new
+                k = (k + 1) % k_max
+            keep = Fu <= Fx
+            X[keep], Fx[keep] = Ut[keep], Fu[keep]
+
+            # ── reducción lineal de la población (LPSR) ───────────────────────
+            N_new = int(round((N_min - N_init) * est["n"] / maxfes + N_init))
+            if N_new < N:
+                o = np.argsort(Fx)[:N_new]
+                X, Fx, N = X[o], Fx[o], N_new
+            A_max = int(round(r_arc * N))
+            if len(A) > A_max:
+                A = A[rng.choice(len(A), A_max, replace=False)]
+            history.append(est["best_f"])
+    except _PresupuestoAgotado:
+        pass
+
+    return {"best_f": est["best_f"], "best_x": est["best_x"],
+            "history": history, "iters": g, "fes": est["n"]}
+
+
+def lshade(f, bounds, N=80, T=500, seed=0, maxfes=None):
+    """L-SHADE (Tanabe & Fukunaga, 2014). N y T sólo fijan el presupuesto (T+1)*N."""
+    return _shade(f, bounds, maxfes or (T + 1) * N, seed, jso=False)
+
+
+def jso(f, bounds, N=80, T=500, seed=0, maxfes=None):
+    """jSO (Brest et al., 2017). N y T sólo fijan el presupuesto (T+1)*N."""
+    return _shade(f, bounds, maxfes or (T + 1) * N, seed, jso=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # REGISTRO DE ALGORITMOS
 # Permite iterar sobre todos con un bucle simple.
 # ══════════════════════════════════════════════════════════════════════════════
@@ -522,4 +670,6 @@ COMPETIDORES = {
     "WOA":     {"fn": woa,     "paradigma": "Swarm",       "ref": "Mirjalili & Lewis (2016)"},
     "ABC":     {"fn": abc,     "paradigma": "Swarm",       "ref": "Karaboga & Basturk (2007)"},
     "FA":      {"fn": fa,      "paradigma": "Swarm",       "ref": "Yang (2010)"},
+    "LSHADE":  {"fn": lshade,  "paradigma": "Evolutivo",   "ref": "Tanabe & Fukunaga (2014)"},
+    "JSO":     {"fn": jso,     "paradigma": "Evolutivo",   "ref": "Brest et al. (2017)"},
 }
