@@ -37,7 +37,7 @@ except ImportError:                                                          # p
     wilcoxon = rankdata = friedmanchisquare = None
 
 ABL_DIR = os.path.join(RESULTS_DIR, 'ablacion')
-COMPETIDORES = ['MAREA_REL', 'MAREABIO_REL', 'ABC', 'DE', 'FA', 'GWO', 'PSO', 'WOA']
+COMPETIDORES = ['LSHADE', 'JSO', 'MAREA_REL', 'MAREABIO_REL', 'ABC', 'DE', 'FA', 'GWO', 'PSO', 'WOA']
 
 # --------------------------------------------------------------------------
 # Clasificacion de funciones (por nombre; fallback por indice en la lista)

@@ -72,6 +72,15 @@ class MAREA2Params:
     sigma_floor: float = 1e-8      # relativo al ancho del dominio
     greedy: bool = True            # aceptar el movimiento solo si mejora
 
+    # ---- transferencia horizontal parcial (Fase H, exploratoria) ----------
+    # La conjugación pasa un plásmido con una FRACCIÓN de los genes, no el
+    # genoma entero: cada célula aplica el movimiento solo en un subconjunto
+    # de coordenadas (al menos una). 'off' deja el algoritmo bit-idéntico.
+    hgt: str = 'off'               # 'off' | 'fixed' | 'adapt'
+    hgt_cr: float = 0.5            # 'fixed': fracción; 'adapt': valor inicial de la media
+    hgt_sd: float = 0.1            # 'adapt': dispersión de la fracción por célula
+    hgt_rate: float = 0.1          # 'adapt': EMA hacia la media de las fracciones exitosas
+
     # ---- quorum sensing (regla 1/5 por colonia) --------------------------
     quorum: bool = True
     qs_target: float = 0.20
@@ -231,6 +240,7 @@ def marea2(f, bounds, p: MAREA2Params, maxfes: int, seed: int = 0):
         limit = int(min(limit, max(10, 0.2 * maxfes / p.N0)))
     history = []
     t = 0
+    mu_cr = p.hgt_cr
 
     def schedule(u):
         if p.pop_schedule == 'constant':
@@ -287,6 +297,10 @@ def marea2(f, bounds, p: MAREA2Params, maxfes: int, seed: int = 0):
 
         # (3) movimiento por colonia
         Xn = np.empty_like(X)
+        if p.hgt == 'adapt':
+            cr = np.clip(rng.normal(mu_cr, p.hgt_sd, n), 0.0, 1.0)
+        elif p.hgt == 'fixed':
+            cr = np.full(n, p.hgt_cr)
         for c in range(k):
             idx = np.where(lab == c)[0]
             if idx.size == 0:
@@ -315,12 +329,17 @@ def marea2(f, bounds, p: MAREA2Params, maxfes: int, seed: int = 0):
                 # no abarcan cuando la colonia tiene <= D células
                 pert += p.diff_axis_mix * sigma * axis_noise(Xc.shape)
                 Xn[idx] = Xc + alpha * (xstar - Xc) + beta * (mu_c - Xc) + g * pert
-                continue
-            if p.noise == 'uniform':
-                xi = rng.uniform(-1, 1, Xc.shape) * math.sqrt(3)
             else:
-                xi = axis_noise(Xc.shape)
-            Xn[idx] = Xc + alpha * (xstar - Xc) + beta * (mu_c - Xc) + g * sigma * xi
+                if p.noise == 'uniform':
+                    xi = rng.uniform(-1, 1, Xc.shape) * math.sqrt(3)
+                else:
+                    xi = axis_noise(Xc.shape)
+                Xn[idx] = Xc + alpha * (xstar - Xc) + beta * (mu_c - Xc) + g * sigma * xi
+            if p.hgt != 'off':
+                # transferencia parcial: solo las coordenadas "transferidas" cambian
+                m = rng.random(Xc.shape) < cr[idx, None]
+                m[np.arange(idx.size), rng.integers(0, D, idx.size)] = True
+                Xn[idx] = np.where(m, Xn[idx], Xc)
         Xn = _bound(Xn, lo, hi, p.bound_mode)
 
         # (4) evaluación (respetando el presupuesto)
@@ -333,6 +352,8 @@ def marea2(f, bounds, p: MAREA2Params, maxfes: int, seed: int = 0):
         Fn[sel] = evaluate(Xn[sel]); fes += sel.size
 
         improved = Fn < F
+        if p.hgt == 'adapt' and improved.any():
+            mu_cr = (1 - p.hgt_rate) * mu_cr + p.hgt_rate * float(cr[improved].mean())
         if p.greedy:
             X = np.where(improved[:, None], Xn, X)
             F = np.where(improved, Fn, F)
@@ -452,6 +473,10 @@ def config(name: str) -> MAREA2Params:
         p.colonies = False; p.pop_schedule = 'gompertz'
     elif name == 'A2_sin_quorum':             # sin colonias + sin quorum (tercera ley, Fase 1a)
         p.colonies = False; p.quorum = False
+    elif name == 'A2_hgt':                    # sin colonias + transferencia parcial adaptativa
+        p.colonies = False; p.hgt = 'adapt'
+    elif name == 'A2_hgt05':                  # sin colonias + transferencia parcial fija (control)
+        p.colonies = False; p.hgt = 'fixed'; p.hgt_cr = 0.5
     elif name == 'A2_todo':                   # todos los cambios juntos (Student-t se conserva)
         p.colonies = False; p.noise = 'normal'; p.gamma_max = 1.0
         p.limit_mode = 'budget'; p.nutrient_memory = False; p.lag = 0.0
@@ -479,4 +504,5 @@ ABLATION_CONFIGS = ['FULL', 'sin_colonias', 'sin_inanicion', 'sin_quorum',
 #    resultados identicos a sin_colonias)
 #   python ablacion_marea2.py report --dims 10 50 --maxfes 50000     (muestra ABLATION + A2)
 A2_CONFIGS = ['sin_colonias', 'A2_eje_student', 'A2_eje_gauss', 'A2_limit',
-              'A2_lite', 'A2_gompertz', 'A2_todo', 'A2_sin_quorum']
+              'A2_lite', 'A2_gompertz', 'A2_todo', 'A2_sin_quorum',
+              'A2_hgt', 'A2_hgt05']
