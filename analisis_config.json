@@ -1,0 +1,35 @@
+{
+  "propuesta": "MAREA2_A2_hgt",
+  "algoritmos": ["MAREA2_A2_hgt", "LSHADE", "JSO", "DE", "PSO", "ABC", "GWO", "WOA", "FA", "CLONALG"],
+  "etiquetas": {
+    "MAREA2_A2_hgt": "MAREA-2", "MAREA2_sin_colonias": "MAREA-2 SC",
+    "LSHADE": "L-SHADE", "JSO": "jSO", "DE": "DE", "PSO": "PSO", "ABC": "ABC",
+    "GWO": "GWO", "WOA": "WOA", "FA": "FA", "CLONALG": "CLONALG",
+    "MAREA": "MAREA", "MAREA_REL": "MAREA_REL", "MAREABIO": "MAREABIO", "MAREABIO_REL": "MAREABIO_REL"
+  },
+  "dims": [10, 50],
+  "maxfes": [5000, 50000, 500000],
+  "corridas": 51,
+  "alpha": 0.05,
+  "umbral_cero": 1e-8,
+
+  "regresion": {
+    "nota": "Tabla 2.1 de memoria_proyecto_2026-09-25.pdf: 12 algoritmos, mediana, sin regla de empate",
+    "algoritmos": ["MAREA2_sin_colonias", "ABC", "WOA", "MAREA_REL", "GWO", "DE", "PSO",
+                   "MAREABIO_REL", "FA", "MAREABIO", "MAREA", "CLONALG"],
+    "esperado": {
+      "MAREA2_sin_colonias": [1.92, 1.92, 2.30, 3.24, 2.08, 1.96],
+      "ABC":          [2.61, 2.63, 3.15, 2.25, 2.58, 3.03],
+      "WOA":          [4.18, 5.48, 6.28, 4.42, 5.35, 7.03],
+      "MAREA_REL":    [7.48, 5.73, 6.30, 6.89, 3.37, 4.54],
+      "GWO":          [4.58, 6.35, 7.85, 3.01, 5.49, 8.00],
+      "DE":           [7.04, 3.73, 2.49, 9.07, 8.42, 6.64],
+      "PSO":          [4.56, 5.15, 6.68, 5.75, 6.61, 8.90],
+      "MAREABIO_REL": [6.15, 7.21, 8.20, 5.45, 5.68, 8.15],
+      "FA":           [8.73, 9.11, 6.34, 8.18, 8.56, 4.68],
+      "MAREABIO":     [8.86, 8.76, 8.41, 8.37, 8.31, 6.80],
+      "MAREA":        [10.93, 10.65, 8.68, 9.99, 10.08, 6.62],
+      "CLONALG":      [10.96, 11.27, 11.34, 11.38, 11.46, 11.65]
+    }
+  }
+}

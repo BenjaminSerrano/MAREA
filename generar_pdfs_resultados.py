@@ -2,7 +2,7 @@
 """
 Consolida resultados_experimento/*.json en un PDF por algoritmo.
 
-Un PDF por algoritmo (11 en total) en pdfs_resultados/. Cada uno lleva:
+Un PDF por algoritmo (los de analisis_config.json) en pdfs_resultados/. Cada uno lleva:
   - portada con el protocolo y el resumen de rangos de Friedman por celda
   - una tabla por dimension: 71 funciones x (3 presupuestos x best/worst/median/mean/std)
 
@@ -22,8 +22,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
 
 R        = "resultados_experimento"
 OUT      = "pdfs_resultados"
-ALGOS    = ["MAREA", "MAREA_REL", "MAREABIO", "MAREABIO_REL",
-            "PSO", "DE", "ABC", "GWO", "WOA", "FA", "CLONALG"]
+ALGOS    = json.load(open("analisis_config.json"))["algoritmos"]   # misma lista que analisis_paper.py
 DIMS     = [10, 50]
 BUDGETS  = [5000, 50000, 500000]
 N_RUNS   = 51
@@ -33,6 +32,13 @@ AZUL      = colors.HexColor("#2a78d6")
 FONDO     = colors.HexColor("#f0f4f9")
 
 NOTAS = {
+    "MAREA2_A2_hgt": "MAREA-2, version del paper (2026-10-02): sin colonias + transferencia "
+                     "horizontal parcial adaptativa. Tag marea2-hgt-frozen. Recibe N*T = "
+                     "4960 / 49 920 / 499 920 evaluaciones (160 menos que los competidores).",
+    "LSHADE":       "L-SHADE con su propia poblacion (reduccion lineal), no N=80. Presupuesto "
+                     "(T+1)*N = 5040 / 50 080 / 500 080, igual que los clasicos.",
+    "JSO":          "jSO con su propia poblacion (reduccion lineal), no N=80. Presupuesto "
+                     "(T+1)*N = 5040 / 50 080 / 500 080, igual que los clasicos.",
     "MAREA":        "Base, tres fuerzas con horario fijo en t/T. gamma_max=0.2 en unidades "
                     "ABSOLUTAS: el ruido queda inerte en el dominio CEC [-100,100].",
     "MAREA_REL":    "Base con el ruido reescalado por (U-L)/10.24. El reescalado es el efecto "
@@ -80,6 +86,10 @@ def num(x):
     if x == 0:             return "0.00e+00"
     return f"{x:.2e}"
 
+def _mu(v):
+    """Media con la regla de CEC 2017 (error < 1e-8 cuenta como 0), igual que analisis_paper.py."""
+    return np.where(v < 1e-8, 0.0, v).mean()
+
 def rangos_friedman():
     """(dim,bud) -> {alg: (rango_medio, posicion)}"""
     out = {}
@@ -87,20 +97,20 @@ def rangos_friedman():
         for bud in BUDGETS:
             M = {a: cargar(a, dim, bud) for a in ALGOS}
             pids = sorted(set.intersection(*[set(M[a]) for a in ALGOS]))
-            mat = np.array([[np.median(M[a][p]) for a in ALGOS] for p in pids])
+            mat = np.array([[_mu(M[a][p]) for a in ALGOS] for p in pids])
             mr = np.apply_along_axis(rankdata, 1, mat).mean(0)
             orden = np.argsort(mr)
             pos = {ALGOS[j]: i + 1 for i, j in enumerate(orden)}
             out[(dim, bud)] = {a: (mr[i], pos[a]) for i, a in enumerate(ALGOS)}
     return out
 
-def gana_de_11(alg, dim, bud):
-    """En cuantas funciones este algoritmo tiene la mejor mediana de los 11."""
+def gana_de_todos(alg, dim, bud):
+    """En cuantas funciones este algoritmo tiene la mejor media de todos."""
     M = {a: cargar(a, dim, bud) for a in ALGOS}
     pids = sorted(set.intersection(*[set(M[a]) for a in ALGOS]))
     n = 0
     for p in pids:
-        meds = {a: np.median(M[a][p]) for a in ALGOS}
+        meds = {a: _mu(M[a][p]) for a in ALGOS}
         if meds[alg] <= min(meds.values()):
             n += 1
     return n, len(pids)
@@ -138,8 +148,8 @@ def construir(alg, funcs, rk, ganas):
         el.append(Paragraph("Nota sobre este algoritmo", h2))
         el.append(Paragraph(NOTAS[alg], cuerpo))
 
-    el.append(Paragraph("Resumen — posicion entre los 11 algoritmos", h2))
-    fil = [["dimension", "presupuesto", "rango medio de Friedman", "posicion de 11",
+    el.append(Paragraph(f"Resumen — posicion entre los {len(ALGOS)} algoritmos (rango por media)", h2))
+    fil = [["dimension", "presupuesto", "rango medio de Friedman", f"posicion de {len(ALGOS)}",
             "funciones donde es el mejor"]]
     for dim in DIMS:
         for bud in BUDGETS:
@@ -217,7 +227,7 @@ def main():
     print("calculando rangos de Friedman...")
     rk = rangos_friedman()
     for alg in ALGOS:
-        ganas = {(d, b): gana_de_11(alg, d, b) for d in DIMS for b in BUDGETS}
+        ganas = {(d, b): gana_de_todos(alg, d, b) for d in DIMS for b in BUDGETS}
         construir(alg, funcs, rk, ganas)
         print(f"  {OUT}/{alg}.pdf")
     print("listo")

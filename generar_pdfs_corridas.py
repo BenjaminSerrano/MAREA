@@ -25,8 +25,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
 
 R       = "resultados_experimento"
 OUT     = "pdfs_corridas"
-ALGOS   = ["MAREA", "MAREA_REL", "MAREABIO", "MAREABIO_REL",
-           "PSO", "DE", "ABC", "GWO", "WOA", "FA", "CLONALG"]
+ALGOS    = json.load(open("analisis_config.json"))["algoritmos"]   # misma lista que analisis_paper.py
 DIMS    = [10, 50]
 BUDGETS = [5000, 50000, 500000]
 N_RUNS  = 51
