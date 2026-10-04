@@ -32,7 +32,7 @@ Los carriles corren en paralelo: el Mac mini genera; el MacBook implementa y ana
 | 9 Discusión | Dónde destaca/no; componentes por MaxFES; robustez de posición | Material ✓ | Calcular varianza de posición (SC = {1,1,1,3,1,1}) |
 | 10 Reproducibilidad | Código, semillas, versiones de competidores, crudos | JSON ✓; opfunu 1.0.4 ✓; **no hay git** | `git init` + tag; documentar semillas y versiones |
 | Método | Tres leyes de MAREA-2 | Logística y Student-t sobreviven a A2/A3; `sin_quorum` sólo en Fase A (5k/50k, vs FULL): 1/48/22, 1/60/10, 0/28/43, 1/27/43 | Evidencia preliminar a favor. Confirmar a 500k sobre `sin_colonias` antes de escribir el método |
-| Presupuesto efectivo | MaxFES = 5k / 50k / 500k | **No es igual para todos.** Clásicos: (T+1)·N = **5040 / 50 080 / 500 080** (`competidores.py:48`, población inicial + T iteraciones). MAREA-2: N·T = **4960 / 49 920 / 499 920** (`experimento_config.py:157`). MAREA-2 corre con 160 evaluaciones menos: −3,2 % a 5k, despreciable a 500k | Sesgo conservador (contra la propuesta): se declara, no se corrige. L-SHADE/jSO reciben (T+1)·N como los clásicos. Chequeo barato opcional a 5k (Fase 2) |
+| Presupuesto efectivo | MaxFES = 5k / 50k / 500k | **No es igual para todos.** Clásicos: (T+1)·N = **5040 / 50 080 / 500 080** (`competidores.py:48`, población inicial + T iteraciones). MAREA-2: N·T = **4960 / 50 000 / 500 000** (`experimento_config.py:157`). MAREA-2 corre con 80 evaluaciones menos: −1,6 % a 5k, despreciable a 500k | Sesgo conservador (contra la propuesta): se declara, no se corrige. L-SHADE/jSO reciben (T+1)·N como los clásicos. Chequeo barato opcional a 5k (Fase 2) |
 
 ---
 
@@ -45,7 +45,7 @@ Los carriles corren en paralelo: el Mac mini genera; el MacBook implementa y ana
 - [ ] **Tests pareados (cerrado):** rank-sum por función (51 vs 51 corridas, muestras independientes) para el W/T/L del §7; signed-rank pareado por problema sobre las 71 medias (Derrac et al.) como p-valor global por par de algoritmos y celda. Justificar en el texto que `seed = run` no empareja corridas entre algoritmos.
 - [ ] **E.** Competidores nuevos: **L-SHADE y jSO** (ambos con resultados publicados en CEC2017 a 10 000·D, validables). EA4eig/AGSK sólo si sobra tiempo: portar desde MATLAB es más caro y más riesgoso.
 - [ ] **Frase para el paper** justificando 11 competidores en vez de 20–25: cobertura de paradigmas (evolutivo DE/L-SHADE/jSO, swarm PSO/GWO/WOA/FA/ABC, inmune CLONALG), ausencia de implementaciones Python validadas de los ganadores CEC, prioridad a la fidelidad y reproducibilidad frente a la cantidad.
-- [ ] **Presupuesto efectivo (cerrado):** los 7 clásicos consumen (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2 consume N·T = 4960 / 49 920 / 499 920. La diferencia (160 evaluaciones) corre **en contra** de la propuesta, así que se declara como sesgo conservador y no se re-corre nada. L-SHADE y jSO reciben (T+1)·N, igual que los otros competidores. Los dos presupuestos van al setup y a la tabla de parámetros, y la nota se coloca junto al resultado de D50/5k (la única celda donde MAREA-2 no es 1º y donde un 3,2 % podría pesar).
+- [ ] **Presupuesto efectivo (cerrado):** los 7 clásicos consumen (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2 consume N·T = 4960 / 50 000 / 500 000. La diferencia (80 evaluaciones) corre **en contra** de la propuesta, así que se declara como sesgo conservador y no se re-corre nada. L-SHADE y jSO reciben (T+1)·N, igual que los otros competidores. Los dos presupuestos van al setup y a la tabla de parámetros, y la nota se coloca junto al resultado de D50/5k (la única celda donde MAREA-2 no es 1º y donde un 1,6 % podría pesar).
 - [ ] **`git init`** en el proyecto; commit del estado actual.
 - [ ] **Añadir a `marea2.config()` el brazo `sin_colonias + sin_quorum`** (hoy no existe). Va **antes** del tag porque toca `marea2.py`.
 - [ ] **Comprobar que `sin_colonias` no cambió — en el Mac mini:** una celda corta (p. ej. D10/5k, 5 corridas, mismas semillas) contra el JSON existente del protocolo; los valores deben ser idénticos bit a bit. Tiene que correr en el mini: en el MacBook sólo 2 de 20 corridas salen idénticas por diferencias de BLAS, y la prueba fallaría con el código correcto. Sin esto el tag no vale.
@@ -147,7 +147,7 @@ Objetivo: un solo comando que lea todos los JSON y produzca todas las tablas y f
 
 ## Fase 4 · Conformidad y reproducibilidad — 2 días
 
-- [ ] Actualizar el doc de setup: 71 funciones y por qué; CEC2022 en D20 dentro del conjunto "D50"; los dos presupuestos efectivos (clásicos y L-SHADE/jSO: (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2: N·T = 4960 / 49 920 / 499 920) con la nota de que el sesgo es contra la propuesta; 3 presupuestos con justificación (500k = convención CEC para 50D; 5M descartado por coste, 7 de 22 celdas); tests pareados y por qué; lista final de competidores y la frase que justifica 11.
+- [ ] Actualizar el doc de setup: 71 funciones y por qué; CEC2022 en D20 dentro del conjunto "D50"; los dos presupuestos efectivos (clásicos y L-SHADE/jSO: (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2: N·T = 4960 / 50 000 / 500 000) con la nota de que el sesgo es contra la propuesta; 3 presupuestos con justificación (500k = convención CEC para 50D; 5M descartado por coste, 7 de 22 celdas); tests pareados y por qué; lista final de competidores y la frase que justifica 11.
 - [ ] Tabla de parámetros y tamaños de población de todos los algoritmos (de la Fase 2), con las tres desviaciones del §4 declaradas.
 - [ ] Paquete reproducible: repo con tag; semillas de las 51 corridas (documentar que protocolo y ablación usan semillas distintas: 0/1065 coincidencias); versiones exactas de implementaciones (opfunu 1.0.4, pyade u origen del código de L-SHADE/jSO, con su hash); JSON crudos.
 
@@ -185,7 +185,7 @@ El riesgo de calendario está en la Fase 1b (implementación y validación) y en
 - opfunu 1.0.4, nunca 1.0.1. Correr `--check` y `verificar_entorno.py` antes de calcular.
 - `early_stop` de MAREA desactivado por defecto; la validación por monotonicidad aplica **sólo** a re-corridas de MAREA con las mismas semillas, no a competidores nuevos.
 - Competidores nuevos: validar presupuesto (~1,0× de (T+1)·N), 3621 entradas por celda y ausencia de no-finitos.
-- Presupuestos efectivos: clásicos y competidores nuevos (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2 N·T = 4960 / 49 920 / 499 920. No igualarlos re-corriendo: declararlos.
+- Presupuestos efectivos: clásicos y competidores nuevos (T+1)·N = 5040 / 50 080 / 500 080; MAREA-2 N·T = 4960 / 50 000 / 500 000. No igualarlos re-corriendo: declararlos.
 - Cualquier verificación de identidad bit a bit corre en el mini, nunca en el MacBook.
 - Mover JSON viejos antes de relanzar (`run_experiment` reanuda).
 - Resultados en `resultados_experimento/`; ablación en `resultados_experimento/ablacion/`; las descargas caen en la raíz: moverlas.

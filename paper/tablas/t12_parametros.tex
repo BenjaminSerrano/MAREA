@@ -1,0 +1,22 @@
+% Parámetros de los algoritmos
+% MAREA-2 recibe N·T evaluaciones y los demás (T+1)·N, con T = MaxFES // N: 80 menos para la propuesta (-1,6 % a 5k; sesgo conservador, declarado). 'N=80': tamaño uniforme en los 7 clásicos, decisión de diseño.
+\begin{table}[ht]\centering\small
+\caption{Parámetros de los algoritmos}
+\begin{tabular}{lrrrrr}
+\toprule
+Algoritmo & Población & Evaluaciones 5k / 50k / 500k & Parámetros & Fuente & Desviación del setup §4 \\
+\midrule
+MAREA-2 & 80 -> 20 (logística de Cobetia) & 4 960 / 50 000 / 500 000 & logística xmid=3.429, s=0.784, ventana 63 h; lag=0.05; alpha 0.1-0.5, beta\_max=0.1, gamma\_max=0.8; dif. de vecinas + 0.3 por eje Student-t nu=3.05; HGT adaptativa (media inicial 0.5, sd 0.1, EMA 0.1); quorum: objetivo 0.2, EMA 0.1, ganancia 2.0, factor en [0.25, 4.0]; inanición tras 10+2D iteraciones, dispersa 0.5 con Lévy beta=1.5, escala 0.1(U-L); memoria de 50 cuencas, radio 0.05(U-L); greedy; límites por reflexión & Stehlik et al. (2025), esta tesis & Propuesta; sin colonias (ablación) \\
+L-SHADE & 18D -> 4 (LPSR) & 5 040 / 50 080 / 500 080 & H=6, M\_F=M\_CR=0.5, archivo 2.6N, p=0.11, current-to-pbest/1 & Tanabe y Fukunaga (2014) & Población propia \\
+jSO & round(25 ln(D) sqrt(D)) -> 4 (LPSR) & 5 040 / 50 080 / 500 080 & H=5, M\_F=0.3, M\_CR=0.8, archivo 1.0N, p 0.125->0.25, current-to-pbest-w/1 & Brest et al. (2017) & Población propia \\
+DE & 80 & 5 040 / 50 080 / 500 080 & DE/rand/1/bin, F=0.8, CR=0.9 & Storn y Price (1997) & N=80 \\
+PSO & 80 & 5 040 / 50 080 / 500 080 & constricción, w=0.729, c1=1.494, c2=1.494 & Clerc y Kennedy (2002) & N=80 \\
+ABC & 80 (40 fuentes) & 5 040 / 50 080 / 500 080 & limit = fuentes·D/2 & Karaboga y Basturk (2007) & N=80 \\
+GWO & 80 & 5 040 / 50 080 / 500 080 & a: 2 -> 0 lineal & Mirjalili et al. (2014) & N=80 \\
+WOA & 80 & 5 040 / 50 080 / 500 080 & b=1.0, a: 2 -> 0 & Mirjalili y Lewis (2016) & N=80 \\
+FA & 80 & 5 040 / 50 080 / 500 080 & alpha=0.5, beta0=1.0, gamma=1.0/(D(U-L)^2) & Yang (2010) & N=80; gamma reescalado (underflow) \\
+CLONALG & 80 & 5 040 / 50 080 / 500 080 & beta=100, máx. 10 clones, reemplazo d=0.1 & de Castro y Von Zuben (2002) & N=80 \\
+\bottomrule
+\end{tabular}
+\par\footnotesize MAREA-2 recibe N·T evaluaciones y los demás (T+1)·N, con T = MaxFES // N: 80 menos para la propuesta (-1,6 \% a 5k; sesgo conservador, declarado). 'N=80': tamaño uniforme en los 7 clásicos, decisión de diseño.
+\end{table}

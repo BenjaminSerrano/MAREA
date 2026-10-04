@@ -13,7 +13,7 @@ Salida:
   paper/suplementario/ media, mediana, SD, mejor y peor por función
   paper/figuras/       rangos por MaxFES, diagramas de diferencia crítica (Nemenyi), W/T/L
 """
-import argparse, json, os, sys
+import argparse, csv, json, os, sys
 from itertools import combinations
 from math import comb
 import numpy as np
@@ -50,11 +50,13 @@ def celda(d, f): return f"{DLAB[d]} {BLAB[f]}"
 
 # ── carga ───────────────────────────────────────────────────────────────────
 _cache = {}
-def load(a, d, f, cero=True):
-    key = (a, d, f, cero)
+def load(a, d, f, cero=True, abl=False):
+    """abl=True: brazo de la ablación (resultados_experimento/ablacion/MAREA2_<a>, 15 corridas)."""
+    key = (a, d, f, cero, abl)
     if key not in _cache:
-        M = np.full((71, CFG["corridas"]), np.nan)
-        for k, v in json.load(open(f"{D_RES}/{a}_D{d}_FES{f}.json")).items():
+        ruta = f"{D_RES}/ablacion/MAREA2_{a}" if abl else f"{D_RES}/{a}"
+        M = np.full((71, CFG["corridas_ablacion"] if abl else CFG["corridas"]), np.nan)
+        for k, v in json.load(open(f"{ruta}_D{d}_FES{f}.json")).items():   # claves pid/fun{i}_run{r}
             M[int(k.split("_")[0][3:]), int(k.split("run")[1])] = v
         if np.isnan(M).any() or not np.isfinite(M).all():
             sys.exit(f"{a} D{d} {f}: faltan corridas o hay no finitos")
@@ -138,9 +140,8 @@ def holm(p):
 # ── salida CSV + LaTeX ─────────────────────────────────────────────────────
 def escribir(nombre, cab, filas, titulo, sub="tablas", tex=True, nota=None):
     os.makedirs(f"{OUT}/{sub}", exist_ok=True)
-    with open(f"{OUT}/{sub}/{nombre}.csv", "w") as fh:
-        fh.write(",".join(cab) + "\n")
-        for fl in filas: fh.write(",".join(str(x) for x in fl) + "\n")
+    with open(f"{OUT}/{sub}/{nombre}.csv", "w", newline="") as fh:
+        csv.writer(fh, lineterminator="\n").writerows([cab] + filas)
     if not tex: return
     esc = lambda s: str(s).replace("_", r"\_").replace("%", r"\%").replace("&", r"\&")
     env = "longtable" if len(filas) > 40 else "tabular"
@@ -318,8 +319,67 @@ def main():
         escribir(f"medias_{DLAB[d]}_{BLAB[f]}", ["Función"] + [et(a) for a in algs], filas,
                  f"Media (SD) del error de 51 corridas, {celda(d, f)}", sub="suplementario")
 
+    ablacion()
+    parametros()
     figuras(algs, P, AGG)
     resumen(algs, P, AGG, comp)
+
+# ── tabla de parámetros (valores leídos del código, no transcritos) ───────
+def parametros():
+    import inspect, competidores as C, marea2
+    from experimento_config import POP_SIZE as N
+    dfl = lambda fn: {k: v.default for k, v in inspect.signature(fn).parameters.items()
+                      if v.default is not inspect.Parameter.empty}
+    pre = lambda g: " / ".join(f"{g(f):,}".replace(",", " ") for f in CFG["maxfes"])
+    clas = pre(lambda f: (f // N + 1) * N)                     # (T+1)·N
+    m = marea2.config(CFG["propuesta"].replace("MAREA2_", ""))
+    pso, de, cl, woa, fa = dfl(C.pso), dfl(C.de), dfl(C.clonalg), dfl(C.woa), dfl(C.fa)
+    filas = [
+        ["MAREA-2", f"{m.N0} -> {m.N_min} (logística de Cobetia)", pre(lambda f: f // N * N),
+         f"logística xmid={m.cob_xmid}, s={m.cob_scal}, ventana {m.cob_tmax:g} h; lag={m.lag}; "
+         f"alpha {m.alpha_min}-{m.alpha_max}, beta_max={m.beta_max}, gamma_max={m.gamma_max}; "
+         f"dif. de vecinas + {m.diff_axis_mix} por eje Student-t nu={m.student_nu}; "
+         f"HGT adaptativa (media inicial {m.hgt_cr}, sd {m.hgt_sd}, EMA {m.hgt_rate}); "
+         f"quorum: objetivo {m.qs_target}, EMA {m.qs_rate}, ganancia {m.qs_gain}, "
+         f"factor en [{m.qs_clip[0]}, {m.qs_clip[1]}]; inanición tras {m.limit_base}+2D iteraciones, "
+         f"dispersa {m.p_disperse} con Lévy beta={m.levy_beta}, escala {m.disp_scale}(U-L); "
+         f"memoria de {m.memory_size} cuencas, radio {m.depletion_radius}(U-L); greedy; límites por reflexión",
+         "Stehlik et al. (2025), esta tesis", "Propuesta; sin colonias (ablación)"],
+        ["L-SHADE", "18D -> 4 (LPSR)", clas,
+         "H=6, M_F=M_CR=0.5, archivo 2.6N, p=0.11, current-to-pbest/1",
+         "Tanabe y Fukunaga (2014)", "Población propia"],
+        ["jSO", "round(25 ln(D) sqrt(D)) -> 4 (LPSR)", clas,
+         "H=5, M_F=0.3, M_CR=0.8, archivo 1.0N, p 0.125->0.25, current-to-pbest-w/1",
+         "Brest et al. (2017)", "Población propia"],
+        ["DE", N, clas, f"DE/rand/1/bin, F={de['F_scale']}, CR={de['CR']}", "Storn y Price (1997)", "N=80"],
+        ["PSO", N, clas, f"constricción, w={pso['w']}, c1={pso['c1']}, c2={pso['c2']}",
+         "Clerc y Kennedy (2002)", "N=80"],
+        ["ABC", f"{N} ({N // 2} fuentes)", clas, "limit = fuentes·D/2", "Karaboga y Basturk (2007)", "N=80"],
+        ["GWO", N, clas, "a: 2 -> 0 lineal", "Mirjalili et al. (2014)", "N=80"],
+        ["WOA", N, clas, f"b={woa['b']}, a: 2 -> 0", "Mirjalili y Lewis (2016)", "N=80"],
+        ["FA", N, clas, f"alpha={fa['alpha']}, beta0={fa['beta0']}, gamma={fa['gamma']}/(D(U-L)^2)",
+         "Yang (2010)", "N=80; gamma reescalado (underflow)"],
+        ["CLONALG", N, clas, f"beta={cl['beta']}, máx. {cl['n_clones']} clones, reemplazo d={cl['d']}",
+         "de Castro y Von Zuben (2002)", "N=80"],
+    ]
+    escribir("t12_parametros", ["Algoritmo", "Población", "Evaluaciones 5k / 50k / 500k",
+                                "Parámetros", "Fuente", "Desviación del setup §4"], filas,
+             "Parámetros de los algoritmos",
+             nota="MAREA-2 recibe N·T evaluaciones y los demás (T+1)·N, con T = MaxFES // N: 80 menos para "
+                  "la propuesta (-1,6 % a 5k; sesgo conservador, declarado). 'N=80': tamaño uniforme en los 7 clásicos, decisión de diseño.")
+
+# ── tabla de ablación (15 corridas, semillas 0-14 en todos los brazos) ────
+def ablacion():
+    A = CFG["ablacion"]; filas = []
+    for comp, fase, con, sin, decision in A["filas"]:
+        celdas = []
+        for d, f in CELDAS:
+            try: celdas.append("/".join(map(str, wtl(load(con, d, f, abl=True), load(sin, d, f, abl=True)))))
+            except FileNotFoundError: celdas.append("—")
+        filas.append([comp, fase, con, sin] + celdas + [decision])
+    escribir("t11_ablacion", ["Componente", "Fase", "Con", "Sin"] + [celda(d, f) for d, f in CELDAS]
+             + ["Decisión"], filas, "Ablación de MAREA-2 (W/T/L, rank-sum, 15 corridas por brazo)",
+             nota=A["nota"] + " 'ruido_normal' y 'eje_student' son perturbación por eje Student-t, no gaussiana.")
 
 # ── figuras ────────────────────────────────────────────────────────────────
 def figuras(algs, P, AGG):
@@ -336,7 +396,8 @@ def figuras(algs, P, AGG):
     COL = {P: BLUE, "LSHADE": ORANGE, "JSO": AQUA, "DE": VIOLET}
     os.makedirs(f"{OUT}/figuras", exist_ok=True)
     def guardar(fig, n):
-        for ext in ("png", "pdf"): fig.savefig(f"{OUT}/figuras/{n}.{ext}", dpi=220, bbox_inches="tight")
+        for ext in ("png", "pdf"): fig.savefig(f"{OUT}/figuras/{n}.{ext}", dpi=220, bbox_inches="tight",
+                                         metadata={"CreationDate": None} if ext == "pdf" else None)
         plt.close(fig)
 
     # Fig. A · rango medio por MaxFES, D10 y D50; etiquetas directas

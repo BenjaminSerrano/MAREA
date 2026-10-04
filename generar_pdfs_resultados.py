@@ -34,7 +34,7 @@ FONDO     = colors.HexColor("#f0f4f9")
 NOTAS = {
     "MAREA2_A2_hgt": "MAREA-2, version del paper (2026-10-02): sin colonias + transferencia "
                      "horizontal parcial adaptativa. Tag marea2-hgt-frozen. Recibe N*T = "
-                     "4960 / 49 920 / 499 920 evaluaciones (160 menos que los competidores).",
+                     "4960 / 50 000 / 500 000 evaluaciones (80 menos que los competidores).",
     "LSHADE":       "L-SHADE con su propia poblacion (reduccion lineal), no N=80. Presupuesto "
                      "(T+1)*N = 5040 / 50 080 / 500 080, igual que los clasicos.",
     "JSO":          "jSO con su propia poblacion (reduccion lineal), no N=80. Presupuesto "

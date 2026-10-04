@@ -1,0 +1,34 @@
+% Ablación de MAREA-2 (W/T/L, rank-sum, 15 corridas por brazo)
+% Semillas 0-14 compartidas por todos los brazos (pareables). W/T/L de 'con' frente a 'sin': W = el componente ayuda. 'ruido_normal' y 'eje_student' son perturbación por eje Student-t, no gaussiana.
+\begin{table}[ht]\centering\small
+\caption{Ablación de MAREA-2 (W/T/L, rank-sum, 15 corridas por brazo)}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+Componente & Fase & Con & Sin & D10 5k & D10 50k & D10 500k & D50 5k & D50 50k & D50 500k & Decisión \\
+\midrule
+Colonias & A/A3 & FULL & sin\_colonias & 0/48/23 & 5/48/18 & 8/56/7 & 1/22/48 & 2/18/51 & 1/32/38 & Se quitan: perjudican en D50, y en D10 a 5k/50k \\
+Inanición & A & FULL & sin\_inanicion & 0/71/0 & 11/53/7 & — & 0/71/0 & 6/65/0 & — & Se mantiene; casi inerte \\
+Quorum (3.ª ley) & A & FULL & sin\_quorum & 21/48/2 & 7/62/2 & — & 43/28/0 & 41/27/3 & — & Se mantiene: ayuda, sobre todo en D50 \\
+Quorum (3.ª ley) & 1a & sin\_colonias & A2\_sin\_quorum & — & 11/59/1 & 8/61/2 & — & 47/24/0 & 28/33/10 & Confirmado a 500k sin colonias \\
+Calendario logístico vs. población constante & A & FULL & sin\_schedule & 34/35/2 & 10/61/0 & — & 53/18/0 & 41/29/1 & — & Se mantiene: ayuda a 5k y en D50 \\
+Logística vs. lineal (LPSR) & A & FULL & lineal & 4/67/0 & 4/65/2 & — & 10/61/0 & 11/60/0 & — & Logística >= lineal; se mantiene \\
+Logística vs. Gompertz & A & FULL & gompertz & 0/69/2 & 1/64/6 & — & 0/59/12 & 0/62/9 & — & Con colonias, Gompertz algo mejor en D50 \\
+Logística vs. Gompertz & A2 & sin\_colonias & A2\_gompertz & 3/68/0 & 4/63/4 & — & 3/67/1 & 10/58/3 & — & Sin colonias, logística >= Gompertz; se mantiene \\
+Paso relativo & A & FULL & sin\_paso\_relativo & 2/42/27 & 25/37/9 & — & 7/44/20 & 21/23/27 & — & Mixto (pierde a 5k); se mantiene \\
+Selección greedy & A & FULL & sin\_greedy & 61/7/3 & 65/5/1 & — & 60/5/6 & 66/3/2 & — & Se mantiene: esencial \\
+Memoria de nutrientes & A & FULL & sin\_memoria & 0/71/0 & 1/70/0 & — & 0/71/0 & 0/71/0 & — & Inerte; se conserva \\
+Lag & A & FULL & sin\_lag & 1/69/1 & 0/70/1 & — & 1/68/2 & 3/67/1 & — & Inerte; se conserva \\
+Memoria + lag & A2 & sin\_colonias & A2\_lite & 0/67/4 & 2/68/1 & — & 2/66/3 & 4/65/2 & — & Inertes; no se quitan \\
+Inanición activa a 5k & A2 & sin\_colonias & A2\_limit & 0/70/1 & — & — & 0/68/3 & — & — & Inerte; no se adopta \\
+Student-t vs. gaussiana (componente por eje) & A & FULL & ruido\_gauss & 2/66/3 & 8/61/2 & — & 0/68/3 & 2/63/6 & — & Neutro (gaussiana algo mejor en D50) \\
+Student-t vs. gaussiana (perturbación por eje) & A2 & A2\_eje\_student & A2\_eje\_gauss & 7/58/6 & 15/51/5 & — & 10/56/5 & 9/53/9 & — & Student-t >= gaussiana; se mantiene \\
+Dif. de vecinas vs. perturbación por eje & A/A3 & FULL & ruido\_normal & 15/31/25 & 22/44/5 & 26/42/3 & 4/11/56 & 7/15/49 & 17/27/27 & Por eje gana en D50 a 5k/50k, no a 500k; se mantiene dif. de vecinas \\
+Dif. de vecinas vs. perturbación por eje & A2/A3 & sin\_colonias & A2\_eje\_student & 18/34/19 & 34/34/3 & 30/39/2 & 6/17/48 & 15/16/40 & 25/31/15 & Idem sin colonias: a 500k gana dif. de vecinas en D10 y D50 \\
+Todos los cambios de la A2 juntos & A2 & sin\_colonias & A2\_todo & 23/27/21 & 35/34/2 & — & 5/15/51 & 16/14/41 & — & No se adopta (criterio: 500k en ambas D, A3) \\
+Transferencia horizontal adaptativa & H & A2\_hgt & sin\_colonias & — & 29/35/7 & 24/36/11 & — & 34/15/22 & 23/25/23 & Se adopta (versión del paper): mejora en D10, D50 mixto \\
+HGT adaptativa vs. fija 0,5 & H & A2\_hgt & A2\_hgt05 & — & 19/42/10 & — & — & 20/23/28 & — & Adaptativa mejor en D10; en D50 la fija algo mejor \\
+MAREA-2 completo vs. ancestro AGEO\_REL & A & FULL & AGEO\_REL & 53/14/4 & 65/4/2 & — & 42/17/12 & 34/11/26 & — & El diseño completo mejora al ancestro en las 4 celdas \\
+\bottomrule
+\end{tabular}
+\par\footnotesize Semillas 0-14 compartidas por todos los brazos (pareables). W/T/L de 'con' frente a 'sin': W = el componente ayuda. 'ruido\_normal' y 'eje\_student' son perturbación por eje Student-t, no gaussiana.
+\end{table}
