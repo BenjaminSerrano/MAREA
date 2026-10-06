@@ -221,8 +221,8 @@ def parameters():
         "l>{\\raggedright\\arraybackslash}p{0.2\\linewidth}"
         ">{\\raggedright\\arraybackslash}p{0.5\\linewidth}l",
         "Algorithm & Population & Parameters & Source", lines, size="\\scriptsize",
-        note="All competitors receive 5,040, 50,080, and 500,080 evaluations, and MAREA-2 receives "
-             "4,960, 50,000, and 500,000."))
+        note="The competitors receive 5,040, 50,080, and 500,080 evaluations, except ABC, whose "
+             "scout phase makes its total vary; MAREA-2 receives 4,960, 50,000, and 500,000."))
 
 
 if __name__ == "__main__":
