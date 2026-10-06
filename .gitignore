@@ -8,3 +8,6 @@ __pycache__/
 # documentos de terceros (no se redistribuyen)
 ALGO.pdf
 fmars-12-1691225.pdf
+
+# papers de terceros descargados para revisión
+bibliografia/**/*.pdf
