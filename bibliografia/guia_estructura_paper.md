@@ -276,7 +276,7 @@ Ya no es diferenciador:
    - Suites, D, presupuestos (5k/50k/500k en FEs), 51 corridas, rivales con sus parámetros publicados, déficit de 80 FEs.
    - Métricas: media como principal, mediana como robustez, regla de 1e-8.
    - Tests: Friedman, Shaffer, Nemenyi y Wilcoxon con Holm.
-   - Separar el conjunto de diseño (ablación con 15 semillas en CEC2014) del de evaluación, y decirlo (solo L-SHADE lo hace en el corpus).
+   - Declarar que la ablación (15 corridas) usó las mismas 71 funciones que la evaluación: no hay separación entre diseño y evaluación (solo L-SHADE la tiene en el corpus). Una sensibilidad en otra suite lo mitigaría.
 7. **Resultados**
    - Rangos (`t1`, `fig_rangos`), por benchmark (`t2`), CD (`fig_cd_nemenyi`), W/T/L (`t7`, `fig_wtl`), por clase de función (`t8`) y robustez (`t3`, `t10`).
    - Convergencia (en FEs) y boxplots, cuando los tengamos.

@@ -26,6 +26,8 @@ CFG = json.load(open("analisis_config.json"))
 ALPHA = CFG["alpha"]
 CELDAS = [(d, f) for d in CFG["dims"] for f in CFG["maxfes"]]
 BLAB = {5000: "5k", 50000: "50k", 500000: "500k"}
+EN = False   # --en: figuras con textos en inglés en paper/manuscrito/figs (para el manuscrito)
+def tr(es, en): return en if EN else es
 DLAB = {10: "D10", 50: "D50"}            # D50 lleva CEC2022 en D20 (setup §1)
 
 # 71 problemas en el orden de experimento_config.CEC_REGISTRY: 30 CEC2014 + 29 CEC2017 + 12 CEC2022.
@@ -394,9 +396,10 @@ def figuras(algs, P, AGG):
         "xtick.color": INK2, "ytick.color": INK2, "axes.spines.top": False,
         "axes.spines.right": False})
     COL = {P: BLUE, "LSHADE": ORANGE, "JSO": AQUA, "DE": VIOLET}
-    os.makedirs(f"{OUT}/figuras", exist_ok=True)
+    FIGDIR = "paper/manuscrito/figs" if EN else f"{OUT}/figuras"
+    os.makedirs(FIGDIR, exist_ok=True)
     def guardar(fig, n):
-        for ext in ("png", "pdf"): fig.savefig(f"{OUT}/figuras/{n}.{ext}", dpi=220, bbox_inches="tight",
+        for ext in ("png", "pdf"): fig.savefig(f"{FIGDIR}/{n}.{ext}", dpi=220, bbox_inches="tight",
                                          metadata={"CreationDate": None} if ext == "pdf" else None)
         plt.close(fig)
 
@@ -417,9 +420,9 @@ def figuras(algs, P, AGG):
             ax.text(xs[-1] + 0.1, y, et(a), va="center", fontsize=8,
                     color=INK if a in COL else INK2, fontweight="bold" if a == P else "normal")
         ax.set_xticks(xs, [BLAB[f] for f in CFG["maxfes"]]); ax.set_xlim(-0.15, xs[-1] + 0.75)
-        ax.set_title("D10" if d == 10 else "D50 (CEC2022 en D20)", fontsize=10, loc="left")
-        ax.set_xlabel("MaxFES"); ax.grid(axis="y", color="#e6e5e1", lw=0.6)
-    axs[0].set_ylabel("Rango medio de Friedman (menor = mejor)"); axs[0].invert_yaxis()
+        ax.set_title("D10" if d == 10 else tr("D50 (CEC2022 en D20)", "D50 (CEC 2022 at D = 20)"), fontsize=10, loc="left")
+        ax.set_xlabel(tr("MaxFES", "Budget (evaluations)")); ax.grid(axis="y", color="#e6e5e1", lw=0.6)
+    axs[0].set_ylabel(tr("Rango medio de Friedman (menor = mejor)", "Mean Friedman rank (lower is better)")); axs[0].invert_yaxis()
     axs[0].set_ylim(len(algs) + 0.4, 0.6)
     guardar(fig, "fig_rangos")
 
@@ -455,8 +458,9 @@ def figuras(algs, P, AGG):
             ax.plot([rm[o[s]] - 0.05, rm[o[e]] + 0.05], [yg, yg], color=INK, lw=2.2,
                     solid_capstyle="round")
         ax.set_title(f"{celda(d, f)}  (Friedman p = {fp(r['p_f'])})", fontsize=9.5, loc="left")
-    fig.text(0.01, 0.005, "Barras negras: algoritmos sin diferencia significativa (Nemenyi, alpha = 0,05). "
-             "D50: CEC2022 en D20.", fontsize=7.5, color=INK2)
+    if not EN:
+        fig.text(0.01, 0.005, "Barras negras: algoritmos sin diferencia significativa (Nemenyi, alpha = 0,05). "
+                 "D50: CEC2022 en D20.", fontsize=7.5, color=INK2)
     fig.tight_layout(rect=(0, 0.02, 1, 1))
     guardar(fig, "fig_cd_nemenyi")
 
@@ -467,7 +471,7 @@ def figuras(algs, P, AGG):
         W = np.array([wtl(load(P, d, f), load(a, d, f)) for a in comp])
         y = np.arange(len(comp))[::-1]
         izq = np.zeros(len(comp))
-        for v, c, lab in zip(W.T, (BLUE, "#d8d7d3", "#e34948"), ("Gana", "Empata", "Pierde")):
+        for v, c, lab in zip(W.T, (BLUE, "#d8d7d3", "#e34948"), (tr("Gana", "Win"), tr("Empata", "Tie"), tr("Pierde", "Loss"))):
             ax.barh(y, v, left=izq, color=c, height=0.72, edgecolor=SURF, linewidth=1, label=lab)
             izq += v
         for yy, (w, t, l) in zip(y, W):
@@ -475,7 +479,7 @@ def figuras(algs, P, AGG):
         ax.set_yticks(y, [et(a) for a in comp], fontsize=8); ax.set_xlim(0, 85)
         ax.set_title(celda(d, f), fontsize=9.5, loc="left"); ax.tick_params(axis="y", length=0)
     axs[0, 0].legend(ncol=3, fontsize=7.5, frameon=False, loc="lower left", bbox_to_anchor=(0, 1.12))
-    for ax in axs[1]: ax.set_xlabel("Funciones (de 71)")
+    for ax in axs[1]: ax.set_xlabel(tr("Funciones (de 71)", "Functions (of 71)"))
     fig.tight_layout()
     guardar(fig, "fig_wtl")
 
@@ -494,7 +498,9 @@ def resumen(algs, P, AGG, comp):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--regresion", action="store_true", help="solo el control de la tabla 2.1")
+    ap.add_argument("--en", action="store_true", help="figuras en inglés para el manuscrito")
     a = ap.parse_args()
+    EN = a.en
     ok = regresion()
     if a.regresion: sys.exit(0 if ok else 1)
     if not ok: sys.exit("El control de regresión falla: no se generan tablas")
