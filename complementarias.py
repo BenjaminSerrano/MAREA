@@ -20,8 +20,8 @@ random  B2 · Búsqueda aleatoria uniforme (línea base que pide Vermetten et al
         que los competidores. Escribe RANDOM_D{d}_FES{5000,50000,500000}.json con el formato
         del protocolo, para que analisis_paper.py lo lea como un algoritmo más.
 tiempo  B3 · Tiempo de cómputo con el procedimiento de CEC2017 (T0, T1, T2 en F18 oficial,
-        200 000 evaluaciones, 5 corridas), D10 y D50, secuencial. Hay que correrlo sin otras
-        celdas pesadas en marcha.
+        200 000 evaluaciones, 5 corridas), D10 y D50, secuencial. T1 se toma antes de cada
+        algoritmo y se usa el mínimo. Hay que correrlo sin otras celdas pesadas en marcha.
 sens    B4 · Sensibilidad de MAREA-2 (A2_hgt) a 6 parámetros, uno a la vez, en CEC2013
         (28 funciones, suite DISTINTA de las de evaluación), D10 y D50, 50k, 15 corridas.
         Incluye los dos números medidos de Cobetia (x_mid y nu).
@@ -183,7 +183,19 @@ def _t0():
     return time.perf_counter() - t
 
 
+T_FES, T_RUNS = 200_000, 5
+
+
+def _t1(f, X):
+    t = time.perf_counter()
+    for x in X: f(x)
+    return time.perf_counter() - t
+
+
 def tiempo():
+    # T1 se mide una vez antes de cada algoritmo y T1_D{d} es el mínimo de esas 10 tomas:
+    # con una sola toma T1 salió inflado en el mini y (T2-T1)/T0 dio negativo
+    # para 4 algoritmos; en el MacBook T2 de PSO queda justo encima de T1, como debe.
     import opfunu.cec_based.cec2017 as c17
     p = _path("TIEMPO.json"); data = _load(p)
     data["T0"] = min(_t0() for _ in range(3))
@@ -192,24 +204,24 @@ def tiempo():
         obj = c17.F172017(ndim=d)                      # F18 oficial (opfunu omite la F2)
         def f(x): return obj.evaluate(x) - obj.f_global
         rng = np.random.default_rng(0)
-        X = rng.uniform(-100, 100, (200_000, d))
-        t = time.perf_counter()
-        for x in X: f(x)
-        data[f"T1_D{d}"] = time.perf_counter() - t
+        X = rng.uniform(-100, 100, (T_FES, d))
+        _t1(f, X[: T_FES // 10])                       # calentamiento, se descarta
         for alg in ALGS:
-            k = f"T2_{alg}_D{d}"
-            if k in data:
+            k, k1 = f"T2_{alg}_D{d}", f"T1_{alg}_D{d}"
+            if k in data and k1 in data:
                 continue
+            data[k1] = _t1(f, X)
             fn = ec._import_alg(alg)
             ts = []
-            for run in range(5):
+            for run in range(T_RUNS):
                 t = time.perf_counter()
-                fn(f, [(-100., 100.)] * d, N=N, T=200_000 // N, seed=run)
+                fn(f, [(-100., 100.)] * d, N=N, T=T_FES // N, seed=run)
                 ts.append(time.perf_counter() - t)
             data[k] = ts
+            data[f"T1_D{d}"] = min(data[f"T1_{a}_D{d}"] for a in ALGS if f"T1_{a}_D{d}" in data)
             _save(p, data)
-            print(f"D{d} {alg:14s} T2 = {np.mean(ts):8.2f} s   (T2-T1)/T0 = "
-                  f"{(np.mean(ts) - data[f'T1_D{d}']) / data['T0']:8.1f}", flush=True)
+            print(f"D{d} {alg:14s} T1 = {data[k1]:6.2f} s   T2 = {np.mean(ts):8.2f} s   "
+                  f"(T2-T1)/T0 = {(np.mean(ts) - data[f'T1_D{d}']) / data['T0']:8.1f}", flush=True)
     _save(p, data)
 
 
@@ -297,9 +309,15 @@ def verificar(runs_conv, runs_sens):
             else: print(f"OK      RANDOM_D{d}_FES{fes}: {len(v)} corridas")
     # B3
     t = _load(_path("TIEMPO.json"))
-    falt = [f"T2_{a}_D{d}" for d in ec.DIMS for a in ALGS if f"T2_{a}_D{d}" not in t]
+    falt = [f"T{i}_{a}_D{d}" for d in ec.DIMS for a in ALGS for i in (1, 2) if f"T{i}_{a}_D{d}" not in t]
     if falt or "T0" not in t: mal(f"tiempo: faltan {falt or 'T0'}")
-    else: print("OK      TIEMPO.json completo")
+    else:
+        for d in ec.DIMS:
+            t1s = [t[f"T1_{a}_D{d}"] for a in ALGS]
+            print(f"        tiempo D{d}: T1 entre {min(t1s):.2f} y {max(t1s):.2f} s, se usa {t[f'T1_D{d}']:.2f}")
+        neg = [f"{a} D{d}" for d in ec.DIMS for a in ALGS if np.mean(t[f"T2_{a}_D{d}"]) < t[f"T1_D{d}"]]
+        if neg: mal(f"tiempo: T2 < T1 en {', '.join(neg)}")
+        else: print("OK      TIEMPO.json completo, T2 > T1 en todos")
     # B4
     sens_ok = True
     for d in SENS_DIMS:
