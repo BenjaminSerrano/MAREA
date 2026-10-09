@@ -182,18 +182,29 @@ def de(f, bounds, N=80, T=500, F_scale=0.8, CR=0.9, seed=0):
 # 3. CLONALG — Artificial Immune System
 #    de Castro & Von Zuben (2002). "Learning and optimization using the
 #    clonal selection principle."
-#    Parámetros: n_clones=10, beta=100, d=0.1  (valores del paper original)
+#    Parámetros: n_clones=10, beta=100, d=0.1, rho=5, sigma0=0.1
 # ══════════════════════════════════════════════════════════════════════════════
 
-def clonalg(f, bounds, N=80, T=500, n_clones=10, beta=100, d=0.1, seed=0):
+def clonalg(f, bounds, N=80, T=500, n_clones=10, beta=100, d=0.1, rho=5.0, sigma0=0.1,
+            seed=0):
     """
-    CLONALG: selección clonal + hipermutación inversamente proporcional al fitness.
+    CLONALG: selección clonal + hipermutación inversamente proporcional a la afinidad.
     beta controla el número de clones (n_clones_i = floor(beta/i)).
-    d: fracción de la población que se reemplaza aleatoriamente cada generación.
+    d: fracción de la población (las de peor afinidad) que se reemplaza al azar.
+    Hipermutación: alpha = exp(-rho * f*), con f* la afinidad normalizada por rango
+    (1 = la mejor), y el clon es x + N(0, alpha * sigma0 * (U - L)).
 
     PRESUPUESTO (corregido 2026-09-04): cada generación evalúa ~278 clones más
     los reemplazos, no N — medido en 3.48x MaxFES. Ahora la corrida se corta al
     agotar (T+1)*N evaluaciones. Ver `_presupuesto`.
+
+    MUTACIÓN (corregida 2026-10-09): era sigma = exp(-rank) * (U - L), con rank 0
+    para la mejor. Iba al revés (la mejor mutaba con sigma ~ 0.99 * (U - L)) y la
+    escala hacía de cada clon un punto casi al azar: perdía contra la búsqueda
+    aleatoria en 53-60 de 71 funciones. Además el reemplazo elegía índices al azar
+    (podía tocar a la mejor) en vez de las d peores. rho = 5 queda entre 2.5 (no
+    alcanza precisión) y 10 (a 5k no mejora a la búsqueda aleatoria) en esfera,
+    Rastrigin y Rosenbrock desplazadas, D10.
     """
     rng = np.random.default_rng(seed)
     L, U = _parse_bounds(bounds)
@@ -220,12 +231,12 @@ def clonalg(f, bounds, N=80, T=500, n_clones=10, beta=100, d=0.1, seed=0):
                 nc = max(1, int(np.floor(beta * N / (i + 1) / N)))
                 nc = min(nc, n_clones)  # tope máximo
 
-                # Tasa de hipermutación: inversamente proporcional al fitness relativo
-                rank_norm = (i + 1) / N   # 0→mejor, 1→peor
-                sigma = np.exp(-rank_norm)  # alta mutación para peores soluciones
+                # Hipermutación inversamente proporcional a la afinidad
+                afin = 1.0 - i / (N - 1)            # 1 = mejor, 0 = peor
+                alpha = np.exp(-rho * afin)         # de Castro & Von Zuben (2002)
 
                 for _ in range(nc):
-                    clone = X[i] + rng.normal(0, sigma * (U - L), n)
+                    clone = X[i] + rng.normal(0, alpha * sigma0 * (U - L), n)
                     clone = np.clip(clone, L, U)
                     clones_X.append(clone)
                     clones_F.append(fc(clone))
@@ -239,8 +250,8 @@ def clonalg(f, bounds, N=80, T=500, n_clones=10, beta=100, d=0.1, seed=0):
             X        = all_X[order]
             F_val    = all_F[order]
 
-            # Reemplazo aleatorio (diversidad)
-            replace_idx = rng.choice(N, d_replace, replace=False)
+            # Reemplazo de las d peores por soluciones al azar (diversidad)
+            replace_idx = np.arange(N - d_replace, N)
             X[replace_idx]     = rng.uniform(L, U, size=(d_replace, n))
             F_val[replace_idx] = np.array([fc(X[i]) for i in replace_idx])
 
